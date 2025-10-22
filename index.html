@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Knights of Columbus — ID Encoder</title>
+  <style>
+    body {
+      font-family: Poppins, sans-serif;
+      background: radial-gradient(circle at top, #1b2562, #0a0f24);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+    header {
+      font-size: 28px;
+      font-weight: 700;
+      margin-top: 30px;
+      text-shadow: 0 0 10px rgba(255,255,255,0.3);
+    }
+    .card {
+      background: rgba(255,255,255,0.08);
+      padding: 25px;
+      border-radius: 16px;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.5);
+      backdrop-filter: blur(8px);
+      margin-top: 40px;
+      width: 90%;
+      max-width: 400px;
+    }
+    label { display:block; margin-top:12px; font-weight:600; }
+    input {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 6px;
+      margin-top: 5px;
+      font-size: 14px;
+    }
+    button {
+      background: #3a5ef4;
+      border: none;
+      color: white;
+      padding: 10px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 15px;
+      margin-top: 20px;
+      width: 100%;
+    }
+    button:hover { background: #2d4ed3; }
+    #qrcode { margin-top: 20px; }
+    a.verify {
+      margin-top: 20px;
+      text-decoration: none;
+      color: #fff;
+      background: #198754;
+      padding: 10px 18px;
+      border-radius: 8px;
+      display: inline-block;
+    }
+
+    /* Modal styles */
+    #modal {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.8);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    #modal-content {
+      background: #fff;
+      color: #000;
+      padding: 20px;
+      border-radius: 12px;
+      max-height: 80vh;
+      overflow-y: auto;
+      width: 90%;
+      max-width: 600px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+      font-size: 14px;
+    }
+    th { background: #1b2562; color: white; }
+    #closeModal {
+      background: #d9534f;
+      color: white;
+      padding: 8px 14px;
+      border: none;
+      border-radius: 6px;
+      margin-top: 10px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <header>KNIGHTS OF COLUMBUS</header>
+  <div class="card">
+    <label>Name</label>
+    <input type="text" id="name">
+    <label>Birthday</label>
+    <input type="date" id="bday">
+    <label>Blood Type</label>
+    <input type="text" id="blood">
+    <label>Date Issued</label>
+    <input type="date" id="issued">
+    <label>Date Expiry</label>
+    <input type="date" id="expiry">
+    <button id="generateBtn">Generate & Save QR</button>
+    <div id="qrcode"></div>
+    <button id="downloadBtn" style="display:none;">Download QR</button>
+    <a href="scanner.html" class="verify">Go to Verifier</a>
+    <button id="viewIDs">View Registered IDs</button>
+  </div>
+
+  <!-- Modal -->
+  <div id="modal">
+    <div id="modal-content">
+      <h3>Registered IDs</h3>
+      <div id="tableContainer"></div>
+      <button id="closeModal">Close</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getDatabase, ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAj6RTJKEXGECPScRNwJvC2TBrrguUZjDY",
+      authDomain: "kofc-ee899.firebaseapp.com",
+      databaseURL: "https://kofc-ee899-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "kofc-ee899",
+      storageBucket: "kofc-ee899.firebasestorage.app",
+      messagingSenderId: "716219934839",
+      appId: "1:716219934839:web:d2c87f1921748732fd7e72",
+      measurementId: "G-KXZ2VN188G"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    async function sha256(message) {
+      const msgBuffer = new TextEncoder().encode(message);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    document.getElementById("generateBtn").addEventListener("click", async () => {
+      const name = document.getElementById("name").value.trim();
+      const bday = document.getElementById("bday").value;
+      const blood = document.getElementById("blood").value.trim();
+      const issued = document.getElementById("issued").value;
+      const expiry = document.getElementById("expiry").value;
+
+      if (!name || !bday || !blood || !issued || !expiry) {
+        alert("Please fill out all fields.");
+        return;
+      }
+
+      const data = `${name}|${bday}|${blood}|${issued}|${expiry}`;
+      const hash = await sha256(data);
+
+      const dbRef = ref(db);
+      const snapshot = await get(child(dbRef, `ids/${hash}`));
+
+      if (snapshot.exists()) {
+        alert("⚠️ User Already Saved!");
+        return;
+      }
+
+      await set(ref(db, 'ids/' + hash), {
+        name, bday, blood, issued, expiry
+      });
+
+      document.getElementById("qrcode").innerHTML = "";
+      new QRCode(document.getElementById("qrcode"), hash);
+
+      setTimeout(() => {
+        const canvas = document.querySelector("#qrcode canvas");
+        const downloadBtn = document.getElementById("downloadBtn");
+        downloadBtn.style.display = "block";
+        downloadBtn.onclick = () => {
+          const link = document.createElement("a");
+          link.download = `${name}_QR.png`;
+          link.href = canvas.toDataURL();
+          link.click();
+        };
+      }, 500);
+
+      alert("✅ Data Saved Successfully!");
+    });
+
+    // Password-protected ID list
+    const viewBtn = document.getElementById("viewIDs");
+    const modal = document.getElementById("modal");
+    const closeModal = document.getElementById("closeModal");
+    const tableContainer = document.getElementById("tableContainer");
+
+    viewBtn.addEventListener("click", async () => {
+      const password = prompt("Enter Password to View IDs:");
+      if (password !== "12345678967") {
+        alert("❌ Incorrect Password!");
+        return;
+      }
+
+      const dbRef = ref(db);
+      const snapshot = await get(child(dbRef, "ids"));
+
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        let html = `
+          <table>
+            <tr>
+              <th>Name</th>
+              <th>Birthday</th>
+              <th>Blood Type</th>
+              <th>Issued</th>
+              <th>Expiry</th>
+            </tr>
+        `;
+        Object.values(data).forEach(person => {
+          html += `
+            <tr>
+              <td>${person.name}</td>
+              <td>${person.bday}</td>
+              <td>${person.blood}</td>
+              <td>${person.issued}</td>
+              <td>${person.expiry}</td>
+            </tr>
+          `;
+        });
+        html += `</table>`;
+        tableContainer.innerHTML = html;
+      } else {
+        tableContainer.innerHTML = "<p>No registered IDs found.</p>";
+      }
+
+      modal.style.display = "flex";
+    });
+
+    closeModal.addEventListener("click", () => modal.style.display = "none");
+  </script>
+</body>
+</html>
