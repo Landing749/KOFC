@@ -1,100 +1,104 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ID Verifier — Knights of Columbus</title>
-  <style>
-    body {
-      background: radial-gradient(circle at top, #1b2562, #0a0f24);
-      color: white;
-      font-family: Poppins, sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-height: 100vh;
-      margin: 0;
-      padding: 20px;
-    }
-    header {
-      font-size: 28px;
-      font-weight: 700;
-      margin-top: 30px;
-      text-shadow: 0 0 10px rgba(255,255,255,0.3);
-    }
-    #reader {
-      width: 320px;
-      margin-top: 30px;
-    }
-    #info {
-      background: rgba(255,255,255,0.08);
-      padding: 20px;
-      border-radius: 12px;
-      margin-top: 20px;
-      display: none;
-      width: 90%;
-      max-width: 360px;
-    }
-    .back {
-      margin-top: 25px;
-      text-decoration: none;
-      color: #fff;
-      background: #198754;
-      padding: 10px 18px;
-      border-radius: 8px;
-    }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Knights of Columbus — Verifier</title>
+<style>
+  body {
+    margin: 0; font-family: Poppins, sans-serif; color: #fff;
+    background: radial-gradient(circle at top, #1b2562, #0a0f24);
+    display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+  }
+  header { margin-top: 40px; font-size: 28px; font-weight: 700; }
+  .card {
+    background: rgba(255,255,255,0.07); backdrop-filter: blur(10px);
+    border-radius: 16px; padding: 24px; margin-top: 30px;
+    width: 90%; max-width: 480px; box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+  }
+  button {
+    background: #007bff; color: #fff; border: none;
+    padding: 10px 16px; border-radius: 8px; cursor: pointer;
+    margin-top: 16px; width: 100%; font-weight: 600;
+  }
+  #result { margin-top: 20px; }
+  #qr-reader { width: 100%; }
+</style>
 </head>
 <body>
-  <header>ID VERIFIER — KNIGHTS OF COLUMBUS</header>
-  <div id="reader"></div>
-  <div id="info"></div>
-  <a href="index.html" class="back">Back to Encoder</a>
+  <header>ID Verifier</header>
+  <div class="card">
+    <div id="qr-reader"></div>
+    <input id="manual" placeholder="Or enter hash manually" style="width:100%;margin-top:10px;padding:8px;border:none;border-radius:8px;background:rgba(255,255,255,0.1);color:#fff;">
+    <button id="verifyBtn">Verify</button>
+    <div id="result"></div>
+    <button id="scanAgain" style="display:none;">Scan Again</button>
+  </div>
 
-  <script src="https://unpkg.com/html5-qrcode"></script>
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getDatabase, ref, get, child } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+<script type="module">
+  import { Html5Qrcode } from "https://unpkg.com/html5-qrcode";
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getDatabase, ref, get, child } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyAj6RTJKEXGECPScRNwJvC2TBrrguUZjDY",
-      authDomain: "kofc-ee899.firebaseapp.com",
-      databaseURL: "https://kofc-ee899-default-rtdb.asia-southeast1.firebasedatabase.app",
-      projectId: "kofc-ee899",
-      storageBucket: "kofc-ee899.firebasestorage.app",
-      messagingSenderId: "716219934839",
-      appId: "1:716219934839:web:d2c87f1921748732fd7e72",
-      measurementId: "G-KXZ2VN188G"
-    };
+  const firebaseConfig = {
+    apiKey: "AIzaSyAj6RTJKEXGECPScRNwJvC2TBrrguUZjDY",
+    authDomain: "kofc-ee899.firebaseapp.com",
+    databaseURL: "https://kofc-ee899-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "kofc-ee899",
+    storageBucket: "kofc-ee899.firebasestorage.app",
+    messagingSenderId: "716219934839",
+    appId: "1:716219934839:web:d2c87f1921748732fd7e72",
+    measurementId: "G-KXZ2VN188G"
+  };
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+  const dbRef = ref(db);
 
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
+  const qrRegion = document.getElementById("qr-reader");
+  const scanner = new Html5Qrcode("qr-reader");
 
-    const reader = new Html5Qrcode("reader");
-    reader.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 },
-      async (decodedText) => {
-        reader.stop();
-        const dbRef = ref(db);
-        const snapshot = await get(child(dbRef, `ids/${decodedText}`));
-        const infoDiv = document.getElementById("info");
-        if (snapshot.exists()) {
-          const data = snapshot.val();
-          infoDiv.innerHTML = `
-            <h3>Verified ID Information</h3>
-            <p><b>Name:</b> ${data.name}</p>
-            <p><b>Birthday:</b> ${data.bday}</p>
-            <p><b>Blood Type:</b> ${data.blood}</p>
-            <p><b>Date Issued:</b> ${data.issued}</p>
-            <p><b>Date Expiry:</b> ${data.expiry}</p>
-            <p style="color:#28a745;font-weight:bold;">✅ Verified from Database</p>
-          `;
-        } else {
-          infoDiv.innerHTML = `<p style="color:#ff5b5b;">❌ No record found for this code.</p>`;
-        }
-        infoDiv.style.display = "block";
+  function showData(data) {
+    document.getElementById("result").innerHTML = `
+      <h3>✅ Verified</h3>
+      <p><b>Name:</b> ${data.name}</p>
+      <p><b>Birthday:</b> ${data.bday}</p>
+      <p><b>Blood Type:</b> ${data.blood}</p>
+      <p><b>Date Issued:</b> ${data.issued}</p>
+      <p><b>Date Expiry:</b> ${data.expiry}</p>
+      <p><b>Hash:</b> ${data.hash}</p>
+    `;
+    document.getElementById("scanAgain").style.display = "block";
+  }
+
+  async function verifyHash(hash) {
+    const snap = await get(child(dbRef, "id_hashes/" + hash));
+    if (snap.exists()) showData(snap.val());
+    else document.getElementById("result").innerHTML = "<h3>❌ Not Found</h3>";
+  }
+
+  document.getElementById("verifyBtn").onclick = () => {
+    const val = document.getElementById("manual").value.trim();
+    if (val) verifyHash(val);
+  };
+
+  document.getElementById("scanAgain").onclick = () => {
+    document.getElementById("result").innerHTML = "";
+    document.getElementById("scanAgain").style.display = "none";
+    startScanner();
+  };
+
+  function startScanner() {
+    scanner.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: 250 },
+      (decoded) => {
+        scanner.stop();
+        verifyHash(decoded);
       },
-      (errorMessage) => {}
+      (err) => {}
     );
-  </script>
+  }
+  startScanner();
+</script>
 </body>
 </html>
